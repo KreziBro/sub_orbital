@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>License Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: monospace; padding: 24px; }
+  h1 { color: #00ff88; margin-bottom: 20px; }
+  input, button { background: #1a1a1a; border: 1px solid #333; color: #e0e0e0; padding: 8px 12px; border-radius: 4px; font-family: monospace; }
+  button { cursor: pointer; }
+  button:hover { border-color: #00ff88; color: #00ff88; }
+  .row { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th, td { border: 1px solid #222; padding: 8px 12px; text-align: left; font-size: 13px; }
+  th { color: #00ff88; background: #111; }
+  tr:hover td { background: #111; }
+  .banned { color: #ff4444; }
+  .active { color: #00ff88; }
+  .btn-sm { padding: 4px 8px; font-size: 12px; }
+  #login { max-width: 300px; margin: 80px auto; }
+  #login h2 { color: #00ff88; margin-bottom: 16px; }
+  #app { display: none; }
+  .note-input { width: 180px; }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h2>Admin Login</h2>
+  <div class="row">
+    <input type="password" id="tokenInput" placeholder="Admin token" style="width:100%">
+  </div>
+  <button onclick="doLogin()" style="width:100%">Войти</button>
+</div>
+
+<div id="app">
+  <h1>License Manager</h1>
+  <div class="row">
+    <input class="note-input" id="noteInput" placeholder="Заметка (ник, кто купил)">
+    <button onclick="createKey()">+ Создать ключ</button>
+    <button onclick="loadList()" style="margin-left:auto">Обновить</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Ключ</th>
+        <th>HWID</th>
+        <th>Статус</th>
+        <th>Заметка</th>
+        <th>Действия</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+let TOKEN = "";
+
+function doLogin() {
+  TOKEN = document.getElementById("tokenInput").value.trim();
+  if (!TOKEN) return;
+  document.getElementById("login").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  loadList();
+}
+
+async function api(method, path, body) {
+  const r = await fetch(path, {
+    method,
+    headers: { "Content-Type": "application/json", "x-admin-token": TOKEN },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return r.json();
+}
+
+async function loadList() {
+  const data = await api("GET", "/admin/list");
+  const tb = document.getElementById("tbody");
+  tb.innerHTML = "";
+  for (const e of data) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="font-size:12px">${e.key}</td>
+      <td style="font-size:11px;color:#888">${e.hwid || "—"}</td>
+      <td class="${e.status}">${e.status}</td>
+      <td>${e.note || ""}</td>
+      <td>
+        <button class="btn-sm" onclick="resetHwid('${e.key}')">Сброс HWID</button>
+        <button class="btn-sm" onclick="toggleBan('${e.key}','${e.status}')">${e.status === "banned" ? "Разбан" : "Бан"}</button>
+        <button class="btn-sm" onclick="deleteKey('${e.key}')">Удалить</button>
+      </td>
+    `;
+    tb.appendChild(tr);
+  }
+}
+
+async function createKey() {
+  const note = document.getElementById("noteInput").value.trim();
+  await api("POST", "/admin/create", { note });
+  document.getElementById("noteInput").value = "";
+  loadList();
+}
+
+async function toggleBan(key, status) {
+  await api("POST", "/admin/ban", { key, ban: status !== "banned" });
+  loadList();
+}
+
+async function resetHwid(key) {
+  await api("POST", "/admin/reset", { key });
+  loadList();
+}
+
+async function deleteKey(key) {
+  if (!confirm("Удалить ключ?")) return;
+  await api("POST", "/admin/delete", { key });
+  loadList();
+}
+</script>
+</body>
+</html>
